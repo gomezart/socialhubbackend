@@ -1,36 +1,55 @@
+from flask import Flask, request, jsonify, session
+from flask_cors import CORS
+import openai
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+CORS(app)
+app.secret_key = "your_secret_key"  # Required for session storage
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Store conversation history
+conversation_history = {}
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
     message = data.get("message")
     scenario = data.get("scenario")
-
+    
     if not message or not scenario:
         return jsonify({"error": "Message and scenario are required."}), 400
-
-    # Define scenario-based system prompts
-    system_prompts = {
-        "dating": "You are a world-class AI dating coach. Engage users in a deep, back-and-forth coaching conversation.",
-        "networking": "You are a top networking expert. Guide users with insightful advice and keep the conversation going.",
-        "confidence": "You are an expert in confidence-building. Challenge users to reflect and grow through continued discussion."
-    }
-
-    system_prompt = system_prompts.get(scenario, "You are an AI assistant providing expert advice.")
+    
+    user_id = request.remote_addr  # Temporary user tracking (later use proper auth)
+    
+    if user_id not in conversation_history:
+        conversation_history[user_id] = [
+            {"role": "system", "content": f"You are a world-class {scenario} coach. Engage the user with open-ended questions and keep the conversation flowing."}
+        ]
+    
+    # Add user message to history
+    conversation_history[user_id].append({"role": "user", "content": message})
 
     try:
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        # New AI conversation strategy
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message},
-                {"role": "assistant", "content": "Provide your response with a follow-up question to keep the conversation going."}
-            ]
+            messages=conversation_history[user_id]  # Send full history
         )
 
         ai_response = response.choices[0].message.content
+        conversation_history[user_id].append({"role": "assistant", "content": ai_response})
+
         return jsonify({"response": ai_response})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
