@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify, session
-from flask_cors import CORS
 import openai
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 
@@ -9,11 +9,11 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-app.secret_key = "your_secret_key"  # Required for session storage
 
+# Load OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Store conversation history
+# Store chat history per user (basic version)
 conversation_history = {}
 
 @app.route("/chat", methods=["POST"])
@@ -21,44 +21,37 @@ def chat():
     data = request.get_json()
     message = data.get("message")
     scenario = data.get("scenario")
-    
+
     if not message or not scenario:
         return jsonify({"error": "Message and scenario are required."}), 400
-    
-    user_id = request.remote_addr  # Temporary user tracking (later use proper auth)
-    
-    if user_id not in conversation_history:
-        conversation_history[user_id] = [
-            {"role": "system", "content": f"You are a world-class {scenario} coach. Your goal is to keep the user engaged by always asking follow-up questions."}
-        ]
-    
-    # Add user message to history
-    conversation_history[user_id].append({"role": "user", "content": message})
+
+    # Define scenario-based system prompt
+    system_prompts = {
+        "dating": "You are a world-class AI dating coach. Provide insightful advice on dating, relationships, and attraction. Always ask open-ended questions to keep the conversation going.",
+        "networking": "You are a top networking expert. Give guidance on making professional connections, career networking, and effective communication. Engage users by asking questions.",
+        "confidence": "You are a confidence-building expert. Help users overcome self-doubt, improve social skills, and develop a strong mindset. Encourage responses and personal reflections."
+    }
+
+    system_prompt = system_prompts.get(scenario, "You are an AI assistant providing expert advice.")
+
+    # Store conversation per session (basic)
+    session_id = "default_user"  # Replace with user ID if needed
+    if session_id not in conversation_history:
+        conversation_history[session_id] = [{"role": "system", "content": system_prompt}]
+
+    conversation_history[session_id].append({"role": "user", "content": message})
 
     try:
+        # Updated OpenAI API call (latest syntax)
         client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=conversation_history[user_id]
+            messages=conversation_history[session_id]
         )
 
         ai_response = response.choices[0].message.content
-
-        # Force a follow-up question
-        follow_up_questions = [
-            "What are your thoughts on that?",
-            "How do you feel about this approach?",
-            "Have you ever tried something similar?",
-            "What’s your experience with this?",
-            "Does this advice make sense to you?",
-            "Would you like me to explain more?"
-        ]
-
-        if "?" not in ai_response[-5:]:  # If AI didn't naturally ask a question
-            ai_response += " " + follow_up_questions[len(conversation_history[user_id]) % len(follow_up_questions)]
-
-        conversation_history[user_id].append({"role": "assistant", "content": ai_response})
+        conversation_history[session_id].append({"role": "assistant", "content": ai_response})
 
         return jsonify({"response": ai_response})
 
