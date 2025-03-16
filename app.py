@@ -29,7 +29,7 @@ def chat():
     
     if user_id not in conversation_history:
         conversation_history[user_id] = [
-            {"role": "system", "content": f"You are a world-class {scenario} coach. Your goal is to keep the user engaged by asking follow-up questions and encouraging them to reply."}
+            {"role": "system", "content": f"You are a world-class {scenario} coach. Your goal is to keep the user engaged by always asking follow-up questions."}
         ]
     
     # Add user message to history
@@ -44,11 +44,19 @@ def chat():
         )
 
         ai_response = response.choices[0].message.content
-        
-        # Ensure AI asks a follow-up question
-        follow_up_prompt = " Now, what do you think about that? Have you tried any of these approaches before?"
-        if "?" not in ai_response[-5:]:  # If the response doesn't end in a question
-            ai_response += follow_up_prompt
+
+        # Force a follow-up question
+        follow_up_questions = [
+            "What are your thoughts on that?",
+            "How do you feel about this approach?",
+            "Have you ever tried something similar?",
+            "What’s your experience with this?",
+            "Does this advice make sense to you?",
+            "Would you like me to explain more?"
+        ]
+
+        if "?" not in ai_response[-5:]:  # If AI didn't naturally ask a question
+            ai_response += " " + follow_up_questions[len(conversation_history[user_id]) % len(follow_up_questions)]
 
         conversation_history[user_id].append({"role": "assistant", "content": ai_response})
 
