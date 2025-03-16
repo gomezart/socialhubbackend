@@ -29,7 +29,7 @@ def chat():
     
     if user_id not in conversation_history:
         conversation_history[user_id] = [
-            {"role": "system", "content": f"You are a world-class {scenario} coach. Engage the user with open-ended questions and keep the conversation flowing."}
+            {"role": "system", "content": f"You are a world-class {scenario} coach. Your goal is to keep the user engaged by asking follow-up questions and encouraging them to reply."}
         ]
     
     # Add user message to history
@@ -40,10 +40,16 @@ def chat():
 
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=conversation_history[user_id]  # Send full history
+            messages=conversation_history[user_id]
         )
 
         ai_response = response.choices[0].message.content
+        
+        # Ensure AI asks a follow-up question
+        follow_up_prompt = " Now, what do you think about that? Have you tried any of these approaches before?"
+        if "?" not in ai_response[-5:]:  # If the response doesn't end in a question
+            ai_response += follow_up_prompt
+
         conversation_history[user_id].append({"role": "assistant", "content": ai_response})
 
         return jsonify({"response": ai_response})
